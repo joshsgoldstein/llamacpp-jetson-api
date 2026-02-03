@@ -508,7 +508,7 @@ async def _openai_chat_completions_impl(
     max_tokens = _cap_max_tokens(request.max_tokens)
     messages = _openai_messages_to_llama(request.messages)
     stop = request.stop or []
-    tools = request.tools
+    tools = [t.model_dump(exclude_none=True) for t in request.tools] if request.tools else None
     tool_choice = request.tool_choice
 
     async with MODEL_LOCK:

@@ -321,56 +321,14 @@ def _strip_think_full(text: str) -> str:
     cleaned = text
     for pat in patterns:
         cleaned = re.sub(pat, "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    # If an opening think tag remains without a close, drop everything after it.
+    for start_tag in ["<think>", "<|think|>", "[THINK]"]:
+        idx = cleaned.lower().find(start_tag.lower())
+        if idx != -1:
+            cleaned = cleaned[:idx]
     # Remove any stray tag markers.
     cleaned = re.sub(r"(<\|/?think\|>|</?think>|\[/?THINK\])", "", cleaned, flags=re.IGNORECASE)
-    return cleaned
-
-
-def _looks_like_reasoning(paragraph: str) -> bool:
-    p = paragraph.strip()
-    if not p:
-        return True
-    cues = [
-        r"^okay\b",
-        r"^first\b",
-        r"^let me\b",
-        r"^i should\b",
-        r"^i need to\b",
-        r"^i will\b",
-        r"^maybe\b",
-        r"^wait\b",
-        r"^from what i remember\b",
-        r"^the user\b",
-        r"^i think\b",
-        r"^here'?s how i\b",
-    ]
-    for cue in cues:
-        if re.search(cue, p, flags=re.IGNORECASE):
-            return True
-    # Paragraphs that explicitly mention "reasoning" or "analysis" are likely meta.
-    if re.search(r"\b(reasoning|analysis|chain[- ]of[- ]thought)\b", p, flags=re.IGNORECASE):
-        return True
-    return False
-
-
-def _strip_reasoning_prefix(text: str) -> str:
-    # Remove leading "reasoning" paragraphs while keeping the final answer.
-    cleaned = text.strip()
-    if not cleaned:
-        return cleaned
-    paragraphs = re.split(r"\n\s*\n+", cleaned)
-    kept: List[str] = []
-    drop_mode = True
-    for para in paragraphs:
-        if drop_mode and _looks_like_reasoning(para):
-            continue
-        drop_mode = False
-        kept.append(para.strip())
-    # If everything looks like reasoning, fall back to the original cleaned text.
-    result = "\n\n".join([k for k in kept if k]).strip()
-    if not result:
-        return cleaned
-    return result
+    return cleaned.strip()
 
 
 def _partial_tag_suffix(text: str) -> int:
@@ -592,7 +550,7 @@ async def _openai_chat_completions_impl(
     message_obj = choice0.get("message") or {}
     content = message_obj.get("content")
     if strip_think:
-        content = _strip_reasoning_prefix(_strip_think_full(content or ""))
+        content = _strip_think_full(content or "")
     finish_reason = choice0.get("finish_reason")
     tool_calls = message_obj.get("tool_calls")
     if not finish_reason:
@@ -739,7 +697,7 @@ async def _anthropic_messages_impl(
     message_obj = choice0.get("message") or {}
     content = message_obj.get("content")
     if strip_think:
-        content = _strip_reasoning_prefix(_strip_think_full(content or ""))
+        content = _strip_think_full(content or "")
     finish_reason = choice0.get("finish_reason") or "end_turn"
     tool_calls = message_obj.get("tool_calls") or []
     content_blocks: List[AnthropicContent] = []

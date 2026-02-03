@@ -116,6 +116,45 @@ def main() -> int:
     if args.print_responses and r.status_code == 200:
         print_block("OPENAI /v1/chat/completions/think", pretty_json(r.text))
 
+    openai_tool_payload = {
+        "model": args.model,
+        "messages": [{"role": "user", "content": "Use the tool to search for 'Jetson'."}],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_vector_db",
+                    "description": "Search a vector database and return the most relevant documents.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string"},
+                            "top_k": {"type": "integer", "default": 5},
+                            "namespace": {"type": "string"},
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        ],
+        "tool_choice": "auto",
+        "max_tokens": 200,
+    }
+    r = _post_json(client, f"{base}/v1/chat/completions", openai_tool_payload)
+    ok = False
+    if r.status_code == 200:
+        try:
+            payload = r.json()
+            choices = payload.get("choices") or []
+            if choices:
+                msg = choices[0].get("message") or {}
+                ok = bool(msg.get("tool_calls"))
+        except Exception:
+            ok = False
+    _print("POST /v1/chat/completions (tool call)", ok, shorten(r.text) if r.status_code != 200 else "")
+    if args.print_responses and r.status_code == 200:
+        print_block("OPENAI /v1/chat/completions (tool call)", pretty_json(r.text))
+
     openai_stream_payload = dict(openai_payload)
     openai_stream_payload["stream"] = True
     r = _post_json(client, f"{base}/v1/chat/completions", openai_stream_payload)
